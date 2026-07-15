@@ -1,19 +1,23 @@
 import aiohttp
 from ..exceptions.common import *
+from typing import Optional
 
 class HttpClient:
     def __init__(self) -> None:
         self.__session = None
-        self.ua = "pyrobale (https://pyrobale.ir): A simple, useful and lightweight api wrapper for bale bots"
+    
+    @property
+    def ua(self):
+        return "pyrobale (https://pyrobale.ir): A simple, useful and lightweight api wrapper for bale bots"
     
 
-    def check_session(self):
+    def check_session(self) -> None:
         if (self.__session and self.__session.closed) or not self.__session:
             self.__session = aiohttp.ClientSession(connector=aiohttp.TCPConnector(keepalive_timeout=20.0))
 
-    async def make_post(self, url: str, data: dict = None, headers: dict = None) -> dict:
+    async def make_post(self, url: str, data: Optional[dict] = None) -> dict:
         self.check_session()
-        async with self.__session.post(url, json=data, headers=headers) as response:
+        async with self.__session.post(url, json=data, headers={ 'User-Agent': self.ua }) as response:
             json = await response.json()
             if json['ok']:
                 return json
