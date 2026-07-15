@@ -1,58 +1,39 @@
-from typing import Optional, TypeAlias, Union, List, Dict, Any, Callable, Awaitable
+from typing import Optional, Union, List, Dict, Any, Callable, Awaitable
 from concurrent.futures import ThreadPoolExecutor
 import traceback
 import inspect
 
-from ..objects.animation import Animation
-from ..objects.audio import Audio
 from ..objects.callbackquery import CallbackQuery
 from ..objects.chatmember import ChatMember
-from ..objects.chatphoto import ChatPhoto
 from ..objects.chat import Chat
 from ..objects.chatfullinfo import ChatFullInfo
-from ..objects.contact import Contact
-from ..objects.copytextbutton import CopyTextButton
-from ..objects.document import Document
 from ..objects.newchatmembers import NewChatMembers
 from ..objects.invitelink import InviteLink
 from ..objects.file import File
-from ..objects.inlinekeyboardbutton import InlineKeyboardButton
 from ..objects.inlinekeyboardmarkup import InlineKeyboardMarkup
 from ..objects.inputfile import InputFile
 from ..objects.inputmedias import (
-    InputMedia,
     InputMediaAudio,
-    InputMediaDocument,
     InputMediaPhoto,
-    InputMediaVideo,
+    InputMediaVideo
 )
-from ..objects.invoice import Invoice
-from ..objects.keyboardbutton import KeyboardButton
 from ..objects.labeledprice import LabeledPrice
-from ..objects.location import Location
-from ..objects.messageid import MessageId
 from ..objects.message import Message
-from ..objects.photosize import PhotoSize
 from ..objects.precheckoutquery import PreCheckoutQuery
 from ..objects.replykeyboardmarkup import ReplyKeyboardMarkup
 from ..objects.sticker import Sticker
-from ..objects.stickerset import StickerSet
 from ..objects.successfulpayment import SuccessfulPayment
 from ..objects.user import User
-from ..objects.video import Video
-from ..objects.voice import Voice
-from ..objects.webappdata import WebAppData
 from ..objects.update import Update
-from ..objects.webappinfo import WebAppInfo
 from ..objects.utils import *
-from ..objects.enums import UpdatesTypes, ChatAction, ChatType, ChatPermissions, TransactionStatus
+from ..objects.enums import UpdatesTypes, ChatAction, ChatPermissions, TransactionStatus
 from ..objects.transaction import Transaction
 from ..StateMachine import StateMachine
-from ..exceptions import NotFoundException, InvalidTokenException, PyroBaleException, ForbiddenException
+from ..exceptions import InvalidTokenException, PyroBaleException, ForbiddenException
+from ..core.http import HttpClient
 import time
-from enum import Enum, member
 import asyncio
-from json import loads, JSONDecodeError, dumps
+from json import dumps
 import aiohttp
 import functools
 
@@ -77,6 +58,8 @@ class Client:
         self.base_url = base_url
         self.requests_base = base_url + token
         self.handle_pre_checkout_query = handle_pre_checkout_query
+
+        self.httpclient = HttpClient()
 
         self.handlers = []
         self._waiters = []
@@ -111,55 +94,6 @@ class Client:
         return f"{base}/{endpoint}"
 
 
-    async def make_post(self, url: str, data: dict = None, headers: dict = None) -> dict:
-        async with aiohttp.ClientSession() as session:
-            async with session.post(url, json=data, headers=headers) as response:
-                json = await response.json()
-                if json['ok']:
-                    return json
-                else:
-                    if json['error_code'] == 404:
-                        raise NotFoundException(f"Error not found 404 : {json['description'] if json['description'] else 'No description returned in error'}")
-                    elif json['error_code'] == 403:
-                        raise ForbiddenException(f"Error Forbidden 403 : {json['description'] if json['description'] else 'No description returned in error'}")
-                    else:
-                        raise PyroBaleException(f"unknown error : {json['description'] if json['description'] else 'No description!'}")
-
-
-    async def make_get(self, url: str, headers: dict = None) -> dict:
-        async with aiohttp.ClientSession() as session:
-            async with session.get(url, headers=headers) as response:
-                if not response.status == 200:
-                    raise PyroBaleException("Unwanted Error from bale: "+str(response.status))
-                json = await response.json()
-                if json['ok']:
-                    if 'result' in json.keys():
-                        return json
-                    else:
-                        if json['error_code'] == 404:
-                            raise NotFoundException(f"Error not found 404 : {json['description'] if json['description'] else 'No description returned in error'}")
-                        elif json['error_code'] == 403:
-                            raise ForbiddenException(f"Error Forbidden 403 : {json['description'] if json['description'] else 'No description returned in error'}")
-                        else:
-                            raise PyroBaleException(f"unknown error : {json['description'] if json['description'] else 'No description'}")
-
-    async def make_via_multipart(self, url: str, data: aiohttp.FormData) -> dict:
-        async with aiohttp.ClientSession() as session:
-            async with session.post(url, data=data) as resp:
-                json_response = await resp.json()
-                if json_response.get('ok'):
-                    return json_response
-                else:
-                    error_code = json_response.get('error_code', 0)
-                    description = json_response.get('description', 'No description')
-
-                    if error_code == 404:
-                        raise NotFoundException(f"Error not found 404 : {description}")
-                    elif error_code == 403:
-                        raise ForbiddenException(f"Error Forbidden 403 : {description}")
-                    else:
-                        raise PyroBaleException(f"Unknown error {error_code}: {description}")
-
     @smart_method
     async def ping(self, round_it=False) -> float:
         """
@@ -171,17 +105,14 @@ class Client:
         Returns:
             how many milliseconds it took to ping
         """
-        async with aiohttp.ClientSession() as session:
-            start_time = time.perf_counter()
-            try:
-                async with session.get(f"{self.requests_base}/getme") as response:
-                    response_time = time.perf_counter() - start_time
-                    if round_it:
-                        return response_time
-                    else:
-                        return round(response_time, 2)
-            except Exception as e:
-                raise e
+        
+        start_time = time.perf_counter()
+        await self.httpclient.make_get(f"{self.requests_base}/getme")
+        response_time = time.perf_counter() - start_time
+        if round_it:
+            return response_time
+        else:
+            return round(response_time, 2)
 
     @smart_method
     async def get_updates(
@@ -200,7 +131,7 @@ class Client:
         Returns:
             List[Dict]: The updates.
         """
-        data = await self.make_post(
+        data = await self.httpclient.make_post(
             self.requests_base + f"/getUpdates", data={
                 'offset':offset,
                 'limit': limit,
@@ -225,7 +156,7 @@ class Client:
         Returns:
             bool: True if the webhook was set.
         """
-        data = await self.make_post(self.requests_base + "/setWebhook", data={"url": url})
+        data = await self.httpclient.make_post(self.requests_base + "/setWebhook", data={"url": url})
         return data.get("ok", False)
 
     @smart_method
@@ -235,7 +166,7 @@ class Client:
         Returns:
             Dict: The webhook information.
         """
-        data = await self.make_get(self.requests_base + "/getWebhookInfo")
+        data = await self.httpclient.make_get(self.requests_base + "/getWebhookInfo")
         return data.get("result", {})
 
     @smart_method
@@ -245,7 +176,7 @@ class Client:
         Returns:
             User: The bot.
         """
-        data = await self.make_get(self.requests_base + "/getMe")
+        data = await self.httpclient.make_get(self.requests_base + "/getMe")
         if not data:
             raise InvalidTokenException("Token is invalid")
         return User(**data["result"])
@@ -257,7 +188,7 @@ class Client:
         Returns:
             bool: True if the bot was logged out.
         """
-        data = await self.make_get(self.requests_base + "/logOut")
+        data = await self.httpclient.make_get(self.requests_base + "/logOut")
         return data.get("ok", False)
 
     @smart_method
@@ -267,7 +198,7 @@ class Client:
         Returns:
             bool: True if the bot was closed.
         """
-        data = await self.make_get(self.requests_base + "/close")
+        data = await self.httpclient.make_get(self.requests_base + "/close")
         return data.get("ok", False)
 
     @smart_method
@@ -289,7 +220,7 @@ class Client:
         Returns:
             Message: The message.
         """
-        data = await self.make_post(
+        data = await self.httpclient.make_post(
             self.requests_base + "/sendMessage",
             data={
                 "chat_id": chat_id,
@@ -316,7 +247,7 @@ class Client:
         Returns:
             bool: True if the message was deleted.
         """
-        data = await self.make_post(
+        data = await self.httpclient.make_post(
             self.requests_base + "/deleteMessage",
             data={
                 "chat_id": chat_id,
@@ -339,7 +270,7 @@ class Client:
         Returns:
             Message: The message.
         """
-        data = await self.make_post(
+        data = await self.httpclient.make_post(
             self.requests_base + "/forwardMessage",
             data={
                 "chat_id": chat_id,
@@ -364,7 +295,7 @@ class Client:
         Returns:
             Message: The message.
         """
-        data = await self.make_post(
+        data = await self.httpclient.make_post(
             self.requests_base + "/copyMessage",
             data={
                 "chat_id": chat_id,
@@ -411,9 +342,9 @@ class Client:
                 form.add_field("reply_markup", dumps(reply_markup.to_dict()))
 
             url = self.requests_base + handler
-            data = await self.make_via_multipart(url, form)
+            data = await self.httpclient.make_via_multipart(url, form)
         else:
-            data = await self.make_post(
+            data = await self.httpclient.make_post(
                 self.requests_base + handler,
                 data={
                     "chat_id": chat_id,
@@ -465,9 +396,9 @@ class Client:
                 form.add_field("reply_markup", dumps(reply_markup.to_dict()))
 
             url = self.requests_base + handler
-            data = await self.make_via_multipart(url, form)
+            data = await self.httpclient.make_via_multipart(url, form)
         else:
-            data = await self.make_post(
+            data = await self.httpclient.make_post(
                 self.requests_base + handler,
                 data={
                     "chat_id": chat_id,
@@ -516,9 +447,9 @@ class Client:
                 form.add_field("reply_markup", dumps(reply_markup.to_dict()))
 
             url = self.requests_base + handler
-            data = await self.make_via_multipart(url, form)
+            data = await self.httpclient.make_via_multipart(url, form)
         else:
-            data = await self.make_post(
+            data = await self.httpclient.make_post(
                 self.requests_base + handler,
                 data={
                     "chat_id": chat_id,
@@ -567,9 +498,9 @@ class Client:
                 form.add_field("reply_markup", dumps(reply_markup.to_dict()))
 
             url = self.requests_base + handler
-            data = await self.make_via_multipart(url, form)
+            data = await self.httpclient.make_via_multipart(url, form)
         else:
-            data = await self.make_post(
+            data = await self.httpclient.make_post(
                 self.requests_base + handler,
                 data={
                     "chat_id": chat_id,
@@ -618,9 +549,9 @@ class Client:
                 form.add_field("reply_markup", dumps(reply_markup.to_dict()))
 
             url = self.requests_base + handler
-            data = await self.make_via_multipart(url, form)
+            data = await self.httpclient.make_via_multipart(url, form)
         else:
-            data = await self.make_post(
+            data = await self.httpclient.make_post(
                 self.requests_base + handler,
                 data={
                     "chat_id": chat_id,
@@ -669,9 +600,9 @@ class Client:
                 form.add_field("reply_markup", dumps(reply_markup.to_dict()))
 
             url = self.requests_base + handler
-            data = await self.make_via_multipart(url, form)
+            data = await self.httpclient.make_via_multipart(url, form)
         else:
-            data = await self.make_post(
+            data = await self.httpclient.make_post(
                 self.requests_base + handler,
                 data={
                     "chat_id": chat_id,
@@ -703,7 +634,7 @@ class Client:
         Returns:
             List[Message]: The list of messages.
         """
-        data = await self.make_post(
+        data = await self.httpclient.make_post(
             self.requests_base + "/sendMediaGroup",
             data={
                 "chat_id": chat_id,
@@ -737,7 +668,7 @@ class Client:
         Returns:
             Message: The message.
         """
-        data = await self.make_post(
+        data = await self.httpclient.make_post(
             self.requests_base + "/sendLocation",
             data={
                 "chat_id": chat_id,
@@ -774,7 +705,7 @@ class Client:
         Returns:
             Message: The message.
         """
-        data = await self.make_post(
+        data = await self.httpclient.make_post(
             self.requests_base + "/sendContact",
             data={
                 "chat_id": chat_id,
@@ -816,7 +747,7 @@ class Client:
             Message: The message.
         """
         new_prices = [price.json for price in prices]
-        data = await self.make_post(
+        data = await self.httpclient.make_post(
             self.requests_base + "/sendInvoice",
             data={
                 "chat_id": chat_id,
@@ -842,7 +773,7 @@ class Client:
         Returns:
             Transaction: The transaction details.
         """
-        data = await self.make_post(
+        data = await self.httpclient.make_post(
             self.requests_base + "/inquireTransaction",
             data={"transaction_id": transaction_id}
         )
@@ -858,7 +789,7 @@ class Client:
         Returns:
             File: The file.
         """
-        data = await self.make_post(
+        data = await self.httpclient.make_post(
             self.requests_base + "/getFile", data={"file_id": file_id}
         )
         return File(**pythonize(data["result"]))
@@ -880,7 +811,7 @@ class Client:
         Returns:
             bool: Whether the answer was shown.
         """
-        data = await self.make_post(
+        data = await self.httpclient.make_post(
             self.requests_base + "/answerCallbackQuery",
             data={
                 "callback_query_id": callback_query_id,
@@ -901,7 +832,7 @@ class Client:
         Returns:
             bool: Whether the ban was successful.
         """
-        data = await self.make_post(
+        data = await self.httpclient.make_post(
             self.requests_base + "/banChatMember",
             data={"chat_id": chat_id, "user_id": user_id},
         )
@@ -934,7 +865,7 @@ class Client:
         Returns:
             bool: Whether the ban was successful.
         """
-        data = await self.make_post(
+        data = await self.httpclient.make_post(
             self.requests_base + "/restrictChatMember",
             data={"chat_id": chat_id, "user_id": user_id,
                   "permissions": {
@@ -962,7 +893,7 @@ class Client:
         Returns:
             bool: Whether the unban was successful.
         """
-        data = await self.make_post(
+        data = await self.httpclient.make_post(
             self.requests_base + "/unbanChatMember",
             data={"chat_id": chat_id, "user_id": user_id},
         )
@@ -997,7 +928,7 @@ class Client:
             A list of administrators.
         """
 
-        data = await self.make_post(
+        data = await self.httpclient.make_post(
             self.requests_base + "/getChatAdministrators",
             data={"chat_id": chat_id},
         )
@@ -1019,7 +950,7 @@ class Client:
         Returns:
             ChatMember: The chat member.
         """
-        data = await self.make_post(
+        data = await self.httpclient.make_post(
             self.requests_base + "/getChatMember",
             data={"chat_id": chat_id, "user_id": user_id},
         )
@@ -1103,7 +1034,7 @@ class Client:
         Returns:
             bool: Whether the user has a specified permission.
         """
-        data = await self.make_post(
+        data = await self.httpclient.make_post(
             self.requests_base + "/promoteChatMember",
             data={
                 "chat_id": chat_id,
@@ -1131,7 +1062,7 @@ class Client:
         Returns:
             bool: Whether the photo was set.
         """
-        data = await self.make_post(
+        data = await self.httpclient.make_post(
             self.requests_base + "/setChatPhoto",
             data={"chat_id": chat_id, "photo": photo},
         )
@@ -1147,7 +1078,7 @@ class Client:
         Returns:
             bool: Whether the chat was leaved.
         """
-        data = await self.make_post(
+        data = await self.httpclient.make_post(
             self.requests_base + "/leaveChat", data={"chat_id": chat_id}
         )
         return data.get("ok", False)
@@ -1163,7 +1094,7 @@ class Client:
         Returns:
             bool: Whether the user is joined to a chat.
         """
-        data = await self.make_post(
+        data = await self.httpclient.make_post(
             self.requests_base + "/getChatMember",
             data={"chat_id": chat_id, "user_id": user_id},
         )
@@ -1182,7 +1113,7 @@ class Client:
         if isinstance(chat_id, str) and chat_id.isdigit():
             chat_id = int(chat_id)
 
-        data = await self.make_post(
+        data = await self.httpclient.make_post(
             self.requests_base + "/getChat", data={"chat_id": chat_id}
         )
 
@@ -1201,7 +1132,7 @@ class Client:
         Returns:
             int: The number of members in a chat.
         """
-        data = await self.make_post(
+        data = await self.httpclient.make_post(
             self.requests_base + "/getChatMembersCount", data={"chat_id": chat_id}
         )
         return data.get("result", 0)
@@ -1217,7 +1148,7 @@ class Client:
         Returns:
             bool: Whether the message was pinned.
         """
-        data = await self.make_post(
+        data = await self.httpclient.make_post(
             self.requests_base + "/pinChatMessage",
             data={"chat_id": chat_id, "message_id": message_id},
         )
@@ -1234,7 +1165,7 @@ class Client:
         Returns:
             bool: Whether the message was unpinned.
         """
-        data = await self.make_post(
+        data = await self.httpclient.make_post(
             self.requests_base + "/unpinChatMessage", data={"chat_id": chat_id, "message_id": message_id}
         )
         return data.get("ok", False)
@@ -1249,7 +1180,7 @@ class Client:
         Returns:
             bool: Whether the message was unpinned.
         """
-        data = await self.make_post(
+        data = await self.httpclient.make_post(
             self.requests_base + "/unpinAllChatMessages", data={"chat_id": chat_id}
         )
         return data.get("ok", False)
@@ -1265,7 +1196,7 @@ class Client:
         Returns:
             bool: Whether the title was changed.
         """
-        data = await self.make_post(
+        data = await self.httpclient.make_post(
             self.requests_base + "/setChatTitle",
             data={"chat_id": chat_id, "title": title},
         )
@@ -1282,7 +1213,7 @@ class Client:
         Returns:
             bool: Whether the description was changed.
         """
-        data = await self.make_post(
+        data = await self.httpclient.make_post(
             self.requests_base + "/setChatDescription",
             data={"chat_id": chat_id, "description": description},
         )
@@ -1298,7 +1229,7 @@ class Client:
         Returns:
             bool: Whether the photo was deleted.
         """
-        data = await self.make_post(
+        data = await self.httpclient.make_post(
             self.requests_base + "/deleteChatPhoto", data={"chat_id": chat_id}
         )
         return data.get("ok", False)
@@ -1322,7 +1253,7 @@ class Client:
         Returns:
             Message: The edited message.
         """
-        data = await self.make_post(
+        data = await self.httpclient.make_post(
             self.requests_base + "/editMessageText",
             data={
                 "chat_id": chat_id,
@@ -1353,7 +1284,7 @@ class Client:
             Message: The edited message.
         """
 
-        data = await self.make_post(
+        data = await self.httpclient.make_post(
             self.requests_base + "/editMessageReplyMarkup",
             data={
                 "chat_id": chat_id,
@@ -1380,7 +1311,7 @@ class Client:
             bool: True in success
         """
 
-        data = await self.make_post(
+        data = await self.httpclient.make_post(
             self.requests_base + "/askReview", data={"user_id": user_id, "delay_seconds": delay_seconds}
         )
         return data["result"]
@@ -1401,7 +1332,7 @@ class Client:
         if ok and error_message:
             raise PyroBaleException("Can't give error_message when payment is allowed (ok=True)")
 
-        data = await self.make_post(
+        data = await self.httpclient.make_post(
             self.requests_base + "/answerPreCheckoutQuery", data={"pre_checkout_query_id": PreCheckoutQuery.id, "ok": ok, "error_message": error_message}
         )
         return data['result']
@@ -1416,7 +1347,7 @@ class Client:
         Returns:
             str: The invite link.
         """
-        data = await self.make_post(
+        data = await self.httpclient.make_post(
             self.requests_base + "/createChatInviteLink", data={"chat_id": chat_id}
         )
         if data.get("result") == None:
@@ -1453,10 +1384,10 @@ class Client:
                 form.add_field("reply_to_message_id", str(reply_to_message_id))
     
             url = self.requests_base + handler
-            data = await self.make_via_multipart(url, form)
+            data = await self.httpclient.make_via_multipart(url, form)
         else:
             query = self.requests_base + handler + f"?chat_id={chat_id}&sticker={sticker.file_id if isinstance(sticker, Sticker) else sticker}{f'&reply_to_message_id={reply_to_message_id}' if reply_to_message_id else ''}"
-            data = await self.make_get(
+            data = await self.httpclient.make_get(
                 query
             )
         result = pythonize(data["result"])
@@ -1481,7 +1412,7 @@ class Client:
         form = aiohttp.FormData()
         form.add_field("user_id", user_id)
         form.add_field("sticker", sticker.file_input, filename=sticker.file_name or "Sticker.webp")
-        data = await self.make_via_multipart(self.requests_base + '/uploadStickerFile', form)
+        data = await self.httpclient.make_via_multipart(self.requests_base + '/uploadStickerFile', form)
         result = pythonize(data['result'])
         print(result)
 
@@ -1496,7 +1427,7 @@ class Client:
         Returns:
             str: The revoked invite link.
         """
-        data = await self.make_post(
+        data = await self.httpclient.make_post(
             self.requests_base + "/revokeChatInviteLink",
             data={"chat_id": chat_id, "invite_link": invite_link},
         )
@@ -1512,7 +1443,7 @@ class Client:
         Returns:
             str: The invite link.
         """
-        data = await self.make_post(
+        data = await self.httpclient.make_post(
             self.requests_base + "/exportChatInviteLink", data={"chat_id": chat_id}
         )
         return data.get("result", "")
@@ -1528,7 +1459,7 @@ class Client:
         Returns:
             bool: Whether the action was sent.
         """
-        data = await self.make_post(
+        data = await self.httpclient.make_post(
             self.requests_base + "/sendChatAction",
             data={"chat_id": str(chat_id), "action": action.value},
         )
@@ -1585,8 +1516,9 @@ class Client:
         if not update or not isinstance(update, dict):
             return
         update_id = update.get("update_id")
-        if update_id:
-            self.last_update_id = update_id + 1
+        if update_id is not None:
+            if update_id > self.last_update_id:
+                self.last_update_id = update_id
 
         if self.check_defined_message:
             try:
