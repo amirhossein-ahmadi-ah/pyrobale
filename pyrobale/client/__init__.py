@@ -247,7 +247,7 @@ class Client:
         Returns:
             bool: True if the message was deleted.
         """
-        data = await self.httpclient.make_post(
+        await self.httpclient.make_post(
             self.requests_base + "/deleteMessage",
             data={
                 "chat_id": chat_id,
