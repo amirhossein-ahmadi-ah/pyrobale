@@ -3,6 +3,7 @@ from ..exceptions.common import *
 from typing import Optional
 
 class HttpClient:
+    __session: Optional["aiohttp.ClientSession"] = None
     def __init__(self) -> None:
         self.__session = None
     
@@ -12,7 +13,7 @@ class HttpClient:
     
 
     def check_session(self) -> None:
-        if (self.__session and self.__session.closed) or not self.__session:
+        if not self.__session or self.__session.closed:
             self.__session = aiohttp.ClientSession(
                 connector=aiohttp.TCPConnector(keepalive_timeout=20.0)
             )
