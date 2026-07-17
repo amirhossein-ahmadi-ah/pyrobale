@@ -2094,7 +2094,11 @@ class Client:
     
     async def _start(self):
         self.me = await self.get_me()
-        print(f"Bot started: @{self.me.username if self.me.username else self.me.first_name}")
+        if self.me:
+            name = "@" + self.me.username if self.me.username else self.me.first_name
+        else:
+            name = "Unknown"
+        print(f"Bot started: {name}")
         
     
     async def _cleanup(self):

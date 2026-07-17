@@ -13,39 +13,50 @@ class HttpClient:
 
     def check_session(self) -> None:
         if (self.__session and self.__session.closed) or not self.__session:
-            self.__session = aiohttp.ClientSession(connector=aiohttp.TCPConnector(keepalive_timeout=20.0))
+            self.__session = aiohttp.ClientSession(
+                connector=aiohttp.TCPConnector(keepalive_timeout=20.0)
+            )
 
     async def make_post(self, url: str, data: Optional[dict] = None) -> dict:
         self.check_session()
-        async with self.__session.post(url, json=data, headers={ 'User-Agent': self.ua }) as response:
-            json = await response.json()
-            if json['ok']:
-                return json
+        if self.__session is None:
+            raise RuntimeError("Session could not be created")
+
+        async with self.__session.post(url, json=data, headers={'User-Agent': self.ua}) as response:
+            json_data = await response.json()
+            if json_data.get('ok'):
+                return json_data
             else:
-                if json['error_code'] == 404:
-                    raise NotFoundException(f"Error not found 404 : {json['description'] if json['description'] else 'No description returned in error'}")
-                elif json['error_code'] == 403:
-                    raise ForbiddenException(f"Error Forbidden 403 : {json['description'] if json['description'] else 'No description returned in error'}")
+                error_code = json_data.get('error_code')
+                description = json_data.get('description') or 'No description'
+                if error_code == 404:
+                    raise NotFoundException(f"Error not found 404 : {description}")
+                elif error_code == 403:
+                    raise ForbiddenException(f"Error Forbidden 403 : {description}")
                 else:
-                    raise PyroBaleException(f"unknown error : {json['description'] if json['description'] else 'No description!'}")
+                    raise PyroBaleException(f"unknown error : {description}")
 
-
-    async def make_get(self, url: str, headers: dict|None = None) -> dict:
+    async def make_get(self, url: str, headers: Optional[dict] = None) -> dict:
         self.check_session()
+        if self.__session is None:
+            raise RuntimeError("Session could not be created")
+
         async with self.__session.get(url, headers=headers) as response:
-            if not response.status == 200:
-                raise PyroBaleException("Unwanted Error from bale: "+str(response.status))
-            json = await response.json()
-            if json['ok']:
-                if 'result' in json.keys():
-                    return json
+            if response.status != 200:
+                raise PyroBaleException(f"Unwanted Error from bale: {response.status}")
+
+            json_data = await response.json()
+            if json_data.get('ok'):
+                return json_data
+            else:
+                error_code = json_data.get('error_code')
+                description = json_data.get('description') or 'No description'
+                if error_code == 404:
+                    raise NotFoundException(f"Error not found 404 : {description}")
+                elif error_code == 403:
+                    raise ForbiddenException(f"Error Forbidden 403 : {description}")
                 else:
-                    if json['error_code'] == 404:
-                        raise NotFoundException(f"Error not found 404 : {json['description'] if json['description'] else 'No description returned in error'}")
-                    elif json['error_code'] == 403:
-                        raise ForbiddenException(f"Error Forbidden 403 : {json['description'] if json['description'] else 'No description returned in error'}")
-                    else:
-                        raise PyroBaleException(f"unknown error : {json['description'] if json['description'] else 'No description'}")
+                    raise PyroBaleException(f"unknown error : {description}")
 
     async def make_via_multipart(self, url: str, data: aiohttp.FormData) -> dict:
         self.check_session()
