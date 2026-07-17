@@ -54,6 +54,8 @@ class Chat:
         self.username = username
         self.photo: "ChatPhoto" = photo
         self.client: "Client" = client
+        for key, value in kwargs.items():
+            setattr(self, key, value)
 
 
     @property

@@ -30,7 +30,7 @@ class HttpClient:
                     raise PyroBaleException(f"unknown error : {json['description'] if json['description'] else 'No description!'}")
 
 
-    async def make_get(self, url: str, headers: dict = None) -> dict:
+    async def make_get(self, url: str, headers: dict|None = None) -> dict:
         self.check_session()
         async with self.__session.get(url, headers=headers) as response:
             if not response.status == 200:

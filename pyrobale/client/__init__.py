@@ -1728,20 +1728,20 @@ class Client:
                                 UpdatesTypes.MEMBER_JOINED, UpdatesTypes.MEMBER_LEFT, UpdatesTypes.PHOTO]:
 
                 if event_data:
-                    message = Message(**pythonize(event_data), **kwargs)
+                    message = create_object(Message, event_data, client=self)
                 else:
                     return event_data
 
-                if handler_type == UpdatesTypes.MEMBER_JOINED and "new_chat_members" in event_data:
+                if handler_type == UpdatesTypes.MEMBER_JOINED and message and "new_chat_members" in event_data:
                     data = {
-                        "inviter": User(**event_data["from"], client=self),
-                        "date": event_data["date"],
-                        "chat": Chat(**event_data["chat"], client=self),
+                        "inviter": User(**pythonize(event_data.get("from", {})), client=self),
+                        "date": event_data.get("date"),
+                        "chat": Chat(**pythonize(event_data.get("chat", {})), client=self),
                         "new_chat_members": [User(**pythonize(u), client=self) for u in event_data["new_chat_members"]]
                     }
                     message.new_chat_members = NewChatMembers(**data)
 
-                elif handler_type == UpdatesTypes.MEMBER_LEFT and "left_chat_member" in event_data:
+                elif handler_type == UpdatesTypes.MEMBER_LEFT and message and "left_chat_member" in event_data:
                     message.left_chat_member = User(**pythonize(event_data["left_chat_member"]), client=self)
 
                 return message
@@ -2001,22 +2001,25 @@ class Client:
                     asyncio.run(self.stop())
 
     def set_state(self, user: Union[User, int, str], state: str):
+        uid: Optional[int] = None
         if isinstance(user, User):
-            uid = user.id
+            uid = int(user.id)
         if isinstance(user, str) and user.isdigit():
             uid = int(user)
         self.state_machine.set_state(uid, state)
     
     def del_state(self, user: Union[User, int, str]):
+        uid: Optional[int] = None
         if isinstance(user, User):
-            uid = user.id
+            uid = int(user.id)
         if isinstance(user, str) and user.isdigit():
             uid = int(user)
         self.state_machine.del_state(uid)
     
     def get_state(self, user: Union[User, int, str]):
+        uid: Optional[int] = None
         if isinstance(user, User):
-            uid = user.id
+            uid = int(user.id)
         if isinstance(user, str) and user.isdigit():
             uid = int(user)
         self.state_machine.get_state(uid)

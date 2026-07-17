@@ -23,6 +23,8 @@ class User:
         self.username = username
         self.client: Client = kwargs.get("client")
         self.language_code = language_code
+        for key, value in kwargs.items():
+            setattr(self, key, value)
     
     def set_state(self, state: str):
         self.client.state_machine.set_state(self.id, state)

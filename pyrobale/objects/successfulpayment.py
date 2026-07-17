@@ -1,11 +1,13 @@
+from typing import Optional
+
 class SuccessfulPayment:
     def __init__(
         self,
-        currency: str,
-        total_amount: int,
-        invoice_payload: str,
-        telegram_payment_charge_id: str,
-        provider_payment_charge_id: str,
+        currency: Optional[str],
+        total_amount: Optional[int],
+        invoice_payload: Optional[str],
+        telegram_payment_charge_id: Optional[str],
+        provider_payment_charge_id: Optional[str],
         **kwargs
     ):
         self.currency = currency
@@ -13,3 +15,5 @@ class SuccessfulPayment:
         self.invoice_payload = invoice_payload
         self.telegram_payment_charge_id = telegram_payment_charge_id
         self.provider_payment_charge_id = provider_payment_charge_id
+        for key, value in kwargs.items():
+            setattr(self, key, value)

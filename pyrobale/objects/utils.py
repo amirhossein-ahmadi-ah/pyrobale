@@ -8,6 +8,15 @@ from typing import Any, Callable, Union, TypeVar, Awaitable, overload
 import aiohttp
 
 
+def create_object(cls, data: dict, client=None):
+    if not data:
+        return None
+    data = pythonize(data)
+    if client:
+        data = data.copy()
+        data["client"] = client
+    return cls(**data)
+
 def pythonize(dictionary: dict) -> dict:
     """Converts a dictionary with keys in snake_case to camelCase."""
     result = {}

@@ -35,6 +35,8 @@ class CallbackQuery:
 
             self.message = Message(**message)
             self.chat = self.message.chat if self.message else None
+        for key, value in kwargs.items():
+            setattr(self, key, value)
 
     @smart_method
     async def answer(

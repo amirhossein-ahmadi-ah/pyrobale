@@ -149,8 +149,8 @@ class Message:
         if not self.client:
             self.client = client
 
-        if not self.client:
-            self.client = kwargs.get("kwargs", {}).get("client")
+        for key, value in kwargs.items():
+            setattr(self, key, value)
 
         if reply_to_message is not None and isinstance(reply_to_message, dict):
             reply_to_message['client'] = self.client
