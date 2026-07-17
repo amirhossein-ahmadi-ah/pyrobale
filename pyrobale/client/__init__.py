@@ -2006,6 +2006,8 @@ class Client:
             uid = int(user.id)
         if isinstance(user, str) and user.isdigit():
             uid = int(user)
+        if uid is None:
+            return
         self.state_machine.set_state(uid, state)
     
     def del_state(self, user: Union[User, int, str]):
@@ -2014,6 +2016,8 @@ class Client:
             uid = int(user.id)
         if isinstance(user, str) and user.isdigit():
             uid = int(user)
+        if uid is None:
+            return
         self.state_machine.del_state(uid)
     
     def get_state(self, user: Union[User, int, str]):
@@ -2022,6 +2026,8 @@ class Client:
             uid = int(user.id)
         if isinstance(user, str) and user.isdigit():
             uid = int(user)
+        if uid is None:
+            return
         self.state_machine.get_state(uid)
 
     @smart_method
