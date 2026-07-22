@@ -145,6 +145,17 @@ class ChatMember:
             return True
         else:
             return False
+
+    @property
+    def is_owner(self) -> bool:
+        """Checks if the user is owner.
+
+        :return: True if the user is owner.
+        """
+        if self.status in ['creator']:
+            return True
+        else:
+            return False
         
     @property
     def is_restricted(self) -> bool:

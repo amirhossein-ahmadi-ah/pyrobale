@@ -93,26 +93,23 @@ class Client:
     def build_api_url(self, base: str, endpoint: str) -> str:
         return f"{base}/{endpoint}"
 
-
     @smart_method
-    async def ping(self, round_it=False) -> float:
+    async def ping(self, round_it: bool = False) -> float:
         """
         Ping the bot to see if the bot is alive.
 
         Args:
-            round_it: returns rounded number if was true
+            round_it: Return the result rounded to 2 decimal places.
 
         Returns:
-            how many milliseconds it took to ping
+            Ping time in milliseconds.
         """
-        
+
         start_time = time.perf_counter()
         await self.httpclient.make_get(f"{self.requests_base}/getme")
-        response_time = time.perf_counter() - start_time
-        if round_it:
-            return response_time
-        else:
-            return round(response_time, 2)
+        response_time = (time.perf_counter() - start_time) * 1000
+
+        return round(response_time, 2) if round_it else response_time
 
     @smart_method
     async def get_updates(
@@ -981,6 +978,27 @@ class Client:
             return False
 
         if chat_user.status in ['creator', 'administrator']:
+            return True
+        else:
+            return False
+
+    @smart_method
+    async def is_user_owner(self, chat_id: int, user_id: int) -> bool:
+        """Checks if a user is owner in a chat
+
+        Args:
+            chat_id (int): The chat to get.
+            user_id (int): The user to get.
+
+        Returns:
+            bool: Whether the user is owner in a chat.
+        """
+        try:
+            chat_user = await self.get_chat_member(chat_id, user_id)
+        except ForbiddenException:
+            return False
+
+        if chat_user.status in ['creator']:
             return True
         else:
             return False

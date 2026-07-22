@@ -235,6 +235,22 @@ class Message:
             return False
 
     @smart_method
+    async def is_owner(self):
+        """Check if the message sender is owner in the chat.
+
+        Returns:
+            bool: True if user is creator, False otherwise
+        """
+        if not self.client or not self.chat or not self.user:
+            return False
+
+        try:
+            member = await self.client.get_chat_member(self.chat.id, self.user.id)
+            return member.status in ['creator']
+        except Exception as e:
+            return False
+
+    @smart_method
     async def reply(
             self,
             text: str,
